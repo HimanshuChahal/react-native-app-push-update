@@ -1,13 +1,17 @@
 package com.apppushupdate
 
 import android.app.Application
-import android.os.Build
+import android.content.Context
 import android.util.Log
+import android.util.Patterns
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.io.InputStream
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+import okhttp3.*
+import org.json.JSONObject
+import androidx.core.content.pm.PackageInfoCompat
+import androidx.core.content.edit
 
 object RNAppPushUpdate {
   private var initialized = false
@@ -19,45 +23,122 @@ object RNAppPushUpdate {
       if (bundleFile.exists()) {
         bundlePath = bundleFile.absolutePath
       }
-      initialized = true
 
       Thread {
-        downloadBundleFromServer(application)
+        checkForUpdate(application)
       }.start()
+
+      initialized = true
     }
     return bundlePath
   }
 
-  fun downloadBundleFromServer(application: Application) {
-    val urlStr = "https://yourserver.com/download"
-
+  private fun checkForUpdate(application: Application) {
+    val baseUrl = application.getString(R.string.rn_app_push_update_base_url)
     try {
-      val url = URL(urlStr)
-      val connection = url.openConnection() as HttpURLConnection
-      connection.requestMethod = "GET"
-      connection.connectTimeout = 10000
-      connection.readTimeout = 10000
+      val packageInfo = application.packageManager.getPackageInfo(application.packageName, 0)
+      val versionCode = PackageInfoCompat.getLongVersionCode(packageInfo)
 
-      val responseCode = connection.responseCode
-      if (responseCode != HttpURLConnection.HTTP_OK) {
-        Log.e("Download", "Server returned HTTP $responseCode")
+      val key = application.getString(R.string.rn_app_push_update_key)
+
+      if (key == "no_key") {
+        Log.e("RNAppPushUpdate", "❌ No key provided in strings.xml. Please refer the documentation.")
         return
       }
 
-      val inputStream: InputStream = connection.inputStream
+      val client = OkHttpClient.Builder()
+        .callTimeout(15, TimeUnit.SECONDS)
+        .build()
+      val request = Request.Builder()
+        .url("${baseUrl}product/versions?key=$key&version_code=$versionCode")
+        .build()
 
-      val outputFile = File(application.filesDir, "index.android.bundle")
-      val outputStream = FileOutputStream(outputFile)
-
-      inputStream.use { input ->
-        outputStream.use { output ->
-          input.copyTo(output)
+      client.newCall(request).enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+          Log.e("RNAppPushUpdate", "❌ Error in fetching product versions ${e.message ?: ""}")
+          e.printStackTrace()
         }
-      }
 
-      Log.d("Download", "✅ File downloaded to ${outputFile.absolutePath}")
+        override fun onResponse(call: Call, response: Response) {
+          val body = response.body?.string()
+
+          try {
+            val json = JSONObject(body ?: "")
+            val isVersionAccepted = json.optBoolean("is_version_accepted", true)
+            val downloadUrl = json.optString("download_url")
+            val bundleId = json.optInt("accepted_bundle_id")
+
+            if (isVersionAccepted && downloadUrl != null && downloadUrl.isNotEmpty()) {
+              val sharedPrefs = application.getSharedPreferences(application.getString(R.string.rn_app_push_update_shared_prefs), Context.MODE_PRIVATE)
+              val downloadedBundleId = sharedPrefs.getInt(application.getString(R.string.rn_app_push_update_shared_prefs_bundle_id), -1)
+              if (downloadedBundleId != bundleId) downloadBundleFromServer(application, downloadUrl, bundleId)
+              else Log.i("RNAppPushUpdate", "Latest bundle already downloaded")
+            } else {
+              Log.d("RNAppPushUpdate", "No download URL received")
+            }
+          } catch (e: Exception) {
+            Log.e("RNAppPushUpdate", "❌ Error in parsing JSON response from server")
+            e.printStackTrace()
+          }
+        }
+      })
+
     } catch (e: Exception) {
-      Log.e("Download", "❌ Failed to download file: ${e.message}")
+      Log.e("RNAppPushUpdate", "❌ Failed to check for update: ${e.message}")
+    }
+  }
+
+  private fun downloadBundleFromServer(application: Application, urlStr: String, bundleId: Int) {
+    if (!Patterns.WEB_URL.matcher(urlStr).matches()) {
+      Log.e("RNAppPushUpdate", "❌ Invalid download URL")
+      return
+    }
+    try {
+      val client = OkHttpClient.Builder()
+        .callTimeout(15, TimeUnit.SECONDS)
+        .build()
+      val request = Request.Builder()
+        .url(urlStr)
+        .build()
+
+      client.newCall(request).enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+          Log.e("RNAppPushUpdate", "❌ Error in downloading the bundle ${e.message ?: ""}")
+          e.printStackTrace()
+        }
+
+        override fun onResponse(call: Call, response: Response) {
+          if (!response.isSuccessful) {
+            Log.e("RNAppPushUpdate", "❌ Error in downloading the bundle, unexpected code $response")
+            return
+          }
+          try {
+            val outputFile = File(application.filesDir, "index.android.bundle")
+            val outputStream = FileOutputStream(outputFile)
+
+            val body = response.body
+            if (body != null) {
+              outputStream.use { out ->
+                body.byteStream().use { input ->
+                  input.copyTo(out)
+                }
+              }
+              val sharedPrefs = application.getSharedPreferences(application.getString(R.string.rn_app_push_update_shared_prefs), Context.MODE_PRIVATE)
+              sharedPrefs.edit {
+                putInt(application.getString(R.string.rn_app_push_update_shared_prefs_bundle_id), bundleId)
+              }
+              Log.d("RNAppPushUpdate", "✅ File downloaded to ${outputFile.absolutePath}")
+            } else {
+              Log.e("RNAppPushUpdate", "❌ Received empty or corrupted file, does the bundle exist on the server?")
+            }
+          } catch (e: Exception) {
+            Log.e("RNAppPushUpdate", "❌ Error in parsing the bundle downloaded from server")
+            e.printStackTrace()
+          }
+        }
+      })
+    } catch (e: Exception) {
+      Log.e("RNAppPushUpdate", "❌ Failed to download file: ${e.message}")
     }
   }
 }

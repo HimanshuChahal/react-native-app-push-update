@@ -1,0 +1,6 @@
+<resources>
+  <string name="rn_app_push_update_key">no_key</string>
+  <string name="rn_app_push_update_base_url">http://54.235.224.204:3000/</string>
+  <string name="rn_app_push_update_shared_prefs">RNAppPushUpdateSharedPrefs</string>
+  <string name="rn_app_push_update_shared_prefs_bundle_id">rn_app_push_update_shared_prefs_bundle_id</string>
+</resources>

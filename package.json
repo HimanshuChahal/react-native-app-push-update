@@ -1,6 +1,6 @@
 {
   "name": "react-native-app-push-update",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Over the air push update for a React Native App",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",

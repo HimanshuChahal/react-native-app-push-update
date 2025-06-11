@@ -1,6 +1,7 @@
 package apppushupdate.example
 
 import android.app.Application
+import com.apppushupdate.RNAppPushUpdate
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
@@ -25,6 +26,10 @@ class MainApplication : Application(), ReactApplication {
         override fun getJSMainModuleName(): String = "index"
 
         override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
+
+        override fun getJSBundleFile(): String? {
+          return RNAppPushUpdate.getJSBundleFile(this@MainApplication)
+        }
 
         override val isNewArchEnabled: Boolean = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
         override val isHermesEnabled: Boolean = BuildConfig.IS_HERMES_ENABLED
