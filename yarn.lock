@@ -10530,12 +10530,13 @@ __metadata:
     "@types/react": ^19.0.0
     react: 19.0.0
     react-native: 0.79.2
+    react-native-app-push-update: "workspace:*"
     react-native-builder-bob: ^0.40.8
     react-native-monorepo-config: ^0.1.9
   languageName: unknown
   linkType: soft
 
-"react-native-app-push-update@workspace:.":
+"react-native-app-push-update@workspace:*, react-native-app-push-update@workspace:.":
   version: 0.0.0-use.local
   resolution: "react-native-app-push-update@workspace:."
   dependencies:

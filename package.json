@@ -1,43 +1,30 @@
 {
   "name": "react-native-app-push-update",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Over the air push update for a React Native App",
-  "main": "./lib/module/index.js",
-  "types": "./lib/typescript/src/index.d.ts",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "exports": {
     ".": {
-      "source": "./src/index.tsx",
-      "types": "./lib/typescript/src/index.d.ts",
-      "default": "./lib/module/index.js"
-    },
-    "./package.json": "./package.json"
+      "import": "./lib/index.js",
+      "require": "./lib/index.js",
+      "types": "./lib/index.d.ts"
+    }
   },
   "files": [
-    "src",
     "lib",
     "android",
     "ios",
-    "cpp",
-    "*.podspec",
-    "react-native.config.js",
-    "!ios/build",
-    "!android/build",
-    "!android/gradle",
-    "!android/gradlew",
-    "!android/gradlew.bat",
-    "!android/local.properties",
-    "!**/__tests__",
-    "!**/__fixtures__",
-    "!**/__mocks__",
-    "!**/.*"
+    "*.podspec"
   ],
   "scripts": {
+    "build": "tsc --project tsconfig.build.json",
     "example": "yarn workspace react-native-app-push-update-example",
     "test": "jest",
     "typecheck": "tsc",
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
-    "prepare": "bob build",
+    "prepare": "yarn build",
     "release": "release-it --only-version"
   },
   "keywords": [
