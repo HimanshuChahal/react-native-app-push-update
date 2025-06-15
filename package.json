@@ -1,6 +1,6 @@
 {
   "name": "react-native-app-push-update",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Over the air push update for a React Native App",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -15,6 +15,7 @@
     "lib",
     "android",
     "ios",
+    "src",
     "*.podspec"
   ],
   "scripts": {

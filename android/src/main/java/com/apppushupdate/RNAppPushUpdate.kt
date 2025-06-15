@@ -12,6 +12,8 @@ import okhttp3.*
 import org.json.JSONObject
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.core.content.edit
+import com.google.firebase.FirebaseApp
+import com.google.firebase.messaging.FirebaseMessaging
 
 object RNAppPushUpdate {
   private var initialized = false
@@ -28,12 +30,31 @@ object RNAppPushUpdate {
         checkForUpdate(application)
       }.start()
 
+      runCatching {
+        if (FirebaseApp.getApps(application).isEmpty()) {
+          val app = FirebaseApp.initializeApp(application)
+          if (app == null) {
+            Log.w("RNAppPushUpdate", "Firebase initialization failed. Is google-services.json missing?")
+          }
+        }
+        val topic = application.getString(R.string.rn_app_push_update_fcm_update_topic)
+        FirebaseMessaging.getInstance().subscribeToTopic(topic).addOnCompleteListener { task ->
+          if (task.isSuccessful) {
+            Log.i("RNAppPushUpdate", "Firebase: Successfully subscribed to topic: $topic")
+          } else {
+            Log.w("RNAppPushUpdate", "Firebase: Failed to subscribe to topic: $topic", task.exception)
+          }
+        }
+      }.onFailure {
+        Log.e("RNAppPushUpdate", "Firebase setup failed", it)
+      }
+
       initialized = true
     }
     return bundlePath
   }
 
-  private fun checkForUpdate(application: Application) {
+  internal fun checkForUpdate(application: Application) {
     val baseUrl = application.getString(R.string.rn_app_push_update_base_url)
     try {
       val packageInfo = application.packageManager.getPackageInfo(application.packageName, 0)
