@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1040618945043",
+    "project_id": "rn-app-push-update",
+    "storage_bucket": "rn-app-push-update.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1040618945043:android:331aaf93098053039c1de6",
+        "android_client_info": {
+          "package_name": "apppushupdate.example"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC30GpSq4Y4eli2y5R4lm7OoqM_UjFAudI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
