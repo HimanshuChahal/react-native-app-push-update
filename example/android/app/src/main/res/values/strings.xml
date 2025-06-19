@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">AppPushUpdateExample</string>
-    <string name="rn_app_push_update_key">838475a0f6e1773e303e95bae798a027</string>
+    <string name="rn_app_push_update_key">your-product-key</string>
 </resources>
