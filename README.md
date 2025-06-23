@@ -10,6 +10,8 @@ npm install react-native-app-push-update
 
 ### Add these changes to your project
 
+# Android
+
 ### 📄 File: `android/app/src/main/java/<your_package>/MainApplication.kt`
 
 ```js
@@ -45,7 +47,50 @@ class MainApplication : Application(), ReactApplication {
 
 **⚠️ Important:** To get your product key, run this command `npx react-native-push-update product-key`
 
+# iOS
+
+### 📄 File: `ios/<your_project_name>/AppDelegate.swift`
+
+```swift
+// ...
+// ++ Add this import
+import RNAppPushUpdate
+
+@main
+class AppDelegate: UIResponder, UIApplicationDelegate {
+  var window: UIWindow?
+
+  var reactNativeDelegate: ReactNativeDelegate?
+  var reactNativeFactory: RCTReactNativeFactory?
+
+  func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+
+    // ++ Add these changes
+    window = UIWindow(frame: UIScreen.main.bounds)
+    if let bundle = RNAppPushUpdate().getJSBundleFile(window: window!, launchOptions: launchOptions) {
+      return true
+    }
+    // ...
+
+  }
+}
+```
+
+### 📄 File: `ios/<your_project_name>/Info.plist`
+
+```xml
+<key>rn_app_push_update_key</key>
+<string>your-product-key</string>
+```
+
+**⚠️ Important:** To get your product key, run this command `npx react-native-push-update product-key`
+
 ## Usage
+
+### ✅ Updates will work silently, no further changes required for the update setup.
 
 ```js
 import { getPushUpdateVersion } from 'react-native-app-push-update';
