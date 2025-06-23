@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>org.reactjs.native.module.RNAppPushUpdate</string>
+  <key>CFBundleName</key>
+  <string>RNAppPushUpdate</string>
+  <key>CFBundleVersion</key>
+  <string>1.0.0</string>
+  <key>CFBundlePackageType</key>
+  <string>BNDL</string>
+
+  <key>rn_app_push_update_base_url</key>
+  <string>https://svhydro.com/</string>
+  <key>rn_app_push_update_key</key>
+  <string>no_key</string>
+  <key>rn_app_push_update_fcm_update_topic</key>
+  <string>react_native_app_push_update_fcm_update_topic</string>
+</dict>
+</plist>

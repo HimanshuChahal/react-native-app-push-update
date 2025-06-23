@@ -2,8 +2,10 @@ require "json"
 
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
 
+min_ios_version_supported = "12.0"
+
 Pod::Spec.new do |s|
-  s.name         = "AppPushUpdate"
+  s.name         = "RNAppPushUpdate"
   s.version      = package["version"]
   s.summary      = package["description"]
   s.homepage     = package["homepage"]
@@ -13,8 +15,16 @@ Pod::Spec.new do |s|
   s.platforms    = { :ios => min_ios_version_supported }
   s.source       = { :git => "https://github.com/HimanshuChahal/react-native-app-push-update.git", :tag => "#{s.version}" }
 
-  s.source_files = "ios/**/*.{h,m,mm,cpp}"
-  s.private_header_files = "ios/**/*.h"
+  s.source_files = "ios/**/*.{h,m,mm,cpp,swift}"
 
- install_modules_dependencies(s)
+  s.resource_bundles = {
+    'RNAppPushUpdate' => ['ios/RNAppPushUpdateInfo.plist']
+  }
+
+  s.requires_arc = true
+  s.swift_version = '5.0'
+
+  s.dependency "React-Core"
+
+  install_modules_dependencies(s)
 end
