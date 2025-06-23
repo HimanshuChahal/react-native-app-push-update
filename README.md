@@ -16,8 +16,10 @@ npm install react-native-app-push-update
 
 ```js
 // ...
-// ++ Add this import
+// =======================
+// 🟡 ++ Add this import
 import com.apppushupdate.RNAppPushUpdate
+// =======================
 
 class MainApplication : Application(), ReactApplication {
 
@@ -28,10 +30,12 @@ class MainApplication : Application(), ReactApplication {
 
         override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
 
-        // ++ Add this function
+        // =======================
+        // 🟡 ++ Add this function
         override fun getJSBundleFile(): String? {
           return RNAppPushUpdate.getJSBundleFile(this@MainApplication)
         }
+        // =======================
 
         override val isNewArchEnabled: Boolean = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
         override val isHermesEnabled: Boolean = BuildConfig.IS_HERMES_ENABLED
@@ -53,8 +57,10 @@ class MainApplication : Application(), ReactApplication {
 
 ```swift
 // ...
-// ++ Add this import
+// =======================
+// 🟡 ++ Add this import
 import RNAppPushUpdate
+// =======================
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -68,11 +74,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
 
-    // ++ Add these changes
+    // =======================
+    // 🟡 ++ Add these changes
     window = UIWindow(frame: UIScreen.main.bounds)
     if let bundle = RNAppPushUpdate().getJSBundleFile(window: window!, launchOptions: launchOptions) {
       return true
     }
+    // =======================
     // ...
 
   }
