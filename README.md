@@ -14,7 +14,7 @@ npm install react-native-app-push-update
 
 ### 📄 File: `android/app/src/main/java/<your_package>/MainApplication.kt`
 
-```js
+```kotlin
 // ...
 // =======================
 // 🟡 ++ Add this import
@@ -45,13 +45,15 @@ class MainApplication : Application(), ReactApplication {
 
 ### 📄 File: `android/app/src/main/res/values/strings.xml`
 
-```js
+```xml
 <string name="rn_app_push_update_key">your-product-key</string>
 ```
 
 **⚠️ Important:** To get your product key, run this command `npx react-native-push-update product-key`
 
 # iOS
+
+## For swift file, // AppDelegate.swift
 
 ### 📄 File: `ios/<your_project_name>/AppDelegate.swift`
 
@@ -84,6 +86,35 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     // ...
 
   }
+}
+```
+
+## For objective c file, // AppDelegate.m
+
+```objc
+// ...
+// =======================
+// 🟡 ++ Add this import
+#import "RNAppPushUpdate.h"
+// =======================
+
+@implementation AppDelegate
+
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
+{
+  // =======================
+  // 🟡 ++ Add these changes
+  self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+
+  RNAppPushUpdate *pushUpdate = [[RNAppPushUpdate alloc] init];
+  NSString *bundlePath = [pushUpdate getJSBundleFileWithWindow:self.window launchOptions:launchOptions];
+
+  if (bundlePath != nil) {
+    return YES;
+  }
+  // =======================
+  // ...
+
 }
 ```
 
