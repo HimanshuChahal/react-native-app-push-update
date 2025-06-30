@@ -20,36 +20,71 @@ object RNAppPushUpdate {
 
   fun getJSBundleFile(application: Application): String? {
     var bundlePath: String? = null
-    if (!initialized) {
-      val bundleFile = File(application.filesDir, "index.android.bundle")
-      if (bundleFile.exists()) {
-        bundlePath = bundleFile.absolutePath
-      }
-
-      Thread {
-        checkForUpdate(application)
-      }.start()
-
-      runCatching {
-        if (FirebaseApp.getApps(application).isEmpty()) {
-          val app = FirebaseApp.initializeApp(application)
-          if (app == null) {
-            Log.w("RNAppPushUpdate", "Firebase initialization failed. Is google-services.json missing?")
-          }
-        }
-        val topic = application.getString(R.string.rn_app_push_update_fcm_update_topic)
-        FirebaseMessaging.getInstance().subscribeToTopic(topic).addOnCompleteListener { task ->
-          if (task.isSuccessful) {
-            Log.i("RNAppPushUpdate", "Firebase: Successfully subscribed to topic: $topic")
+    try {
+      if (!initialized) {
+        val bundleFile = File(application.filesDir, "index.android.bundle")
+        if (bundleFile.exists()) {
+          val packageInfo = application.packageManager.getPackageInfo(application.packageName, 0)
+          val versionCode = PackageInfoCompat.getLongVersionCode(packageInfo)
+          val sharedPrefs = application.getSharedPreferences(
+            application.getString(R.string.rn_app_push_update_shared_prefs),
+            Context.MODE_PRIVATE
+          )
+          val downloadedBundleVersionCode = sharedPrefs.getLong(
+            application.getString(R.string.rn_app_push_update_shared_prefs_version_code),
+            -1
+          )
+          if (downloadedBundleVersionCode == versionCode) {
+            bundlePath = bundleFile.absolutePath
           } else {
-            Log.w("RNAppPushUpdate", "Firebase: Failed to subscribe to topic: $topic", task.exception)
+            Log.w("RNAppPushUpdate", "Downloaded bundle is for versionCode: $downloadedBundleVersionCode, current versionCode: $versionCode. Deleting this bundle.")
+            if (bundleFile.delete()) {
+              Log.d("RNAppPushUpdate", "✅ Bundle file deleted.")
+              sharedPrefs.edit {
+                remove(application.getString(R.string.rn_app_push_update_shared_prefs_bundle_id))
+                remove(application.getString(R.string.rn_app_push_update_shared_prefs_version_code))
+              }
+            } else {
+              Log.w("RNAppPushUpdate", "⚠️ Failed to delete bundle file.")
+            }
           }
         }
-      }.onFailure {
-        Log.e("RNAppPushUpdate", "Firebase setup failed", it)
-      }
 
-      initialized = true
+        Thread {
+          checkForUpdate(application)
+        }.start()
+
+        runCatching {
+          if (FirebaseApp.getApps(application).isEmpty()) {
+            val app = FirebaseApp.initializeApp(application)
+            if (app == null) {
+              Log.w(
+                "RNAppPushUpdate",
+                "Firebase initialization failed. Is google-services.json missing?"
+              )
+            }
+          }
+          val topic = application.getString(R.string.rn_app_push_update_fcm_update_topic)
+          FirebaseMessaging.getInstance().subscribeToTopic(topic).addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+              Log.i("RNAppPushUpdate", "Firebase: Successfully subscribed to topic: $topic")
+            } else {
+              Log.w(
+                "RNAppPushUpdate",
+                "Firebase: Failed to subscribe to topic: $topic",
+                task.exception
+              )
+            }
+          }
+        }.onFailure {
+          Log.e("RNAppPushUpdate", "Firebase setup failed", it)
+        }
+
+        initialized = true
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+      Log.e("RNAppPushUpdate", "❌ Failed to fetch the bundle ${e.message}")
     }
     return bundlePath
   }
@@ -92,7 +127,7 @@ object RNAppPushUpdate {
             if (isVersionAccepted && downloadUrl != null && downloadUrl.isNotEmpty()) {
               val sharedPrefs = application.getSharedPreferences(application.getString(R.string.rn_app_push_update_shared_prefs), Context.MODE_PRIVATE)
               val downloadedBundleId = sharedPrefs.getInt(application.getString(R.string.rn_app_push_update_shared_prefs_bundle_id), -1)
-              if (downloadedBundleId != bundleId) downloadBundleFromServer(application, downloadUrl, bundleId)
+              if (downloadedBundleId != bundleId) downloadBundleFromServer(application, downloadUrl, bundleId, versionCode)
               else Log.i("RNAppPushUpdate", "Latest bundle already downloaded")
             } else {
               Log.d("RNAppPushUpdate", "No download URL received")
@@ -109,7 +144,7 @@ object RNAppPushUpdate {
     }
   }
 
-  private fun downloadBundleFromServer(application: Application, urlStr: String, bundleId: Int) {
+  private fun downloadBundleFromServer(application: Application, urlStr: String, bundleId: Int, versionCode: Long) {
     if (!Patterns.WEB_URL.matcher(urlStr).matches()) {
       Log.e("RNAppPushUpdate", "❌ Invalid download URL")
       return
@@ -147,6 +182,7 @@ object RNAppPushUpdate {
               val sharedPrefs = application.getSharedPreferences(application.getString(R.string.rn_app_push_update_shared_prefs), Context.MODE_PRIVATE)
               sharedPrefs.edit {
                 putInt(application.getString(R.string.rn_app_push_update_shared_prefs_bundle_id), bundleId)
+                putLong(application.getString(R.string.rn_app_push_update_shared_prefs_version_code), versionCode)
               }
               Log.d("RNAppPushUpdate", "✅ File downloaded to ${outputFile.absolutePath}")
             } else {
@@ -155,6 +191,19 @@ object RNAppPushUpdate {
           } catch (e: Exception) {
             Log.e("RNAppPushUpdate", "❌ Error in parsing the bundle downloaded from server")
             e.printStackTrace()
+            val bundleFile = File(application.filesDir, "index.android.bundle")
+            if (bundleFile.exists()) {
+              if(bundleFile.delete()) {
+                val sharedPrefs = application.getSharedPreferences(
+                  application.getString(R.string.rn_app_push_update_shared_prefs),
+                  Context.MODE_PRIVATE
+                )
+                sharedPrefs.edit {
+                  remove(application.getString(R.string.rn_app_push_update_shared_prefs_bundle_id))
+                  remove(application.getString(R.string.rn_app_push_update_shared_prefs_version_code))
+                }
+              }
+            }
           }
         }
       })
