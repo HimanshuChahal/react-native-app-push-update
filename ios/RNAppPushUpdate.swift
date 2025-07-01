@@ -23,7 +23,7 @@ import React
       topic = dict["rn_app_push_update_fcm_update_topic"] as? String ?? ""
     }
     
-    if true {
+    if !initialized {
       let fileManager = FileManager.default
       let bundleDirectory = getLibraryDirectory().appendingPathComponent("Application Support")
       if !fileManager.fileExists(atPath: bundleDirectory.path) {
@@ -35,8 +35,23 @@ import React
       }
       let bundleFile = bundleDirectory.appendingPathComponent("index.ios.bundle")
       if FileManager.default.fileExists(atPath: bundleFile.path) {
-        print("RNAppPushUpdate", "Found the latest bundle")
-        bundlePath = bundleFile.path
+        let defaults = UserDefaults.standard
+        let downloadedVersionCode = defaults.string(forKey: "rn_app_push_update_shared_prefs_version_code") ?? "-1"
+        let versionCode = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+        if downloadedVersionCode == versionCode {
+          print("RNAppPushUpdate", "Found the latest bundle")
+          bundlePath = bundleFile.path
+        } else {
+          print("RNAppPushUpdate", "Downloaded bundle is for versionCode: \(downloadedVersionCode), current versionCode: \(versionCode). Deleting this bundle.")
+          do {
+            try FileManager.default.removeItem(at: bundleFile)
+            print("RNAppPushUpdate", "✅ Bundle file deleted.")
+            UserDefaults.standard.removeObject(forKey: "rn_app_push_update_shared_prefs_bundle_id")
+            UserDefaults.standard.removeObject(forKey: "rn_app_push_update_shared_prefs_version_code")
+          } catch {
+            print("RNAppPushUpdate", "⚠️ Failed to delete bundle file.")
+          }
+        }
       }
 
       DispatchQueue.global(qos: .background).async {
@@ -125,7 +140,7 @@ import React
               let downloadedBundleId = defaults.integer(forKey: "rn_app_push_update_shared_prefs_bundle_id")
               
               if downloadedBundleId != bundleId {
-                self.downloadBundleFromServer(urlStr: downloadUrl, bundleId: bundleId)
+                self.downloadBundleFromServer(urlStr: downloadUrl, bundleId: bundleId, versionCode: versionCode)
               } else {
                 print("RNAppPushUpdate", "Latest bundle already downloaded")
               }
@@ -139,7 +154,7 @@ import React
     }.resume()
   }
 
-  private func downloadBundleFromServer(urlStr: String, bundleId: Int) {
+  private func downloadBundleFromServer(urlStr: String, bundleId: Int, versionCode: String) {
     guard let url = URL(string: urlStr), urlStr.range(of: "^[a-zA-Z0-9-]+://", options: .regularExpression) != nil else {
       print("RNAppPushUpdate", "❌ Invalid download URL")
       return
@@ -173,10 +188,22 @@ import React
 
         let defaults = UserDefaults.standard
         defaults.set(bundleId, forKey: "rn_app_push_update_shared_prefs_bundle_id")
+        defaults.set(versionCode, forKey: "rn_app_push_update_shared_prefs_version_code")
 
         print("RNAppPushUpdate", "✅ File downloaded to \(destinationURL.path)")
       } catch {
         print("RNAppPushUpdate", "❌ Error in saving the downloaded bundle: \(error.localizedDescription)")
+        let dirPath = self.getLibraryDirectory().appendingPathComponent("Application Support")
+        if FileManager.default.fileExists(atPath: dirPath.path) {
+          let bundle = dirPath.appendingPathComponent("index.ios.bundle")
+          if FileManager.default.fileExists(atPath: bundle.path) {
+            do {
+              try FileManager.default.removeItem(at: bundle)
+              UserDefaults.standard.removeObject(forKey: "rn_app_push_update_shared_prefs_bundle_id")
+              UserDefaults.standard.removeObject(forKey: "rn_app_push_update_shared_prefs_version_code")
+            } catch {}
+          }
+        }
       }
     }
 

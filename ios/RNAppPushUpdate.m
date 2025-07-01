@@ -28,23 +28,45 @@
             topic = dict[@"rn_app_push_update_fcm_update_topic"] ?: @"";
         }
     }
-
+  
+  if (!self.initialized) {
     NSString *bundleDirectory = [[self getLibraryDirectory] stringByAppendingPathComponent:@"Application Support"];
     NSFileManager *fileManager = [NSFileManager defaultManager];
-
+    
     if (![fileManager fileExistsAtPath:bundleDirectory]) {
-        NSError *error = nil;
-        [fileManager createDirectoryAtPath:bundleDirectory withIntermediateDirectories:YES attributes:nil error:&error];
-        if (error) {
-            NSLog(@"RNAppPushUpdate ❌ Error creating directory: %@", error.localizedDescription);
-        }
+      NSError *error = nil;
+      [fileManager createDirectoryAtPath:bundleDirectory withIntermediateDirectories:YES attributes:nil error:&error];
+      if (error) {
+        NSLog(@"RNAppPushUpdate ❌ Error creating directory: %@", error.localizedDescription);
+      }
     }
-
+    
     NSString *bundleFile = [bundleDirectory stringByAppendingPathComponent:@"index.ios.bundle"];
     if ([fileManager fileExistsAtPath:bundleFile]) {
+      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+      NSString *downloadedVersionCode = [defaults stringForKey:@"rn_app_push_update_shared_prefs_version_code"] ?: @"-1";
+      NSString *versionCode = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"0";
+      if (downloadedVersionCode == versionCode) {
         NSLog(@"RNAppPushUpdate ✅ Found the latest bundle");
         bundlePath = bundleFile;
+      } else {
+        NSLog(@"RNAppPushUpdate: Downloaded bundle is for versionCode: %@, current versionCode: %@. Deleting this bundle.", downloadedVersionCode, versionCode);
+        
+        NSError *error = nil;
+        
+        if ([fileManager fileExistsAtPath:bundleFile]) {
+          BOOL success = [fileManager removeItemAtPath:bundleFile error:&error];
+          if (success) {
+            NSLog(@"RNAppPushUpdate: ✅ Bundle file deleted.");
+            [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"rn_app_push_update_shared_prefs_bundle_id"];
+            [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"rn_app_push_update_shared_prefs_version_code"];
+          } else {
+            NSLog(@"RNAppPushUpdate: ⚠️ Failed to delete bundle file: %@", error.localizedDescription);
+          }
+        }
+      }
     }
+  }
 
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
         [self checkForUpdate];
@@ -105,7 +127,7 @@
             NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
             NSInteger downloadedBundleId = [defaults integerForKey:@"rn_app_push_update_shared_prefs_bundle_id"];
             if (downloadedBundleId != bundleId) {
-                [self downloadBundleFromServerWithUrl:downloadUrl bundleId:bundleId];
+                [self downloadBundleFromServerWithUrl:downloadUrl bundleId:bundleId versionCode:versionCode];
             } else {
                 NSLog(@"RNAppPushUpdate ✅ Latest bundle already downloaded");
             }
@@ -116,7 +138,7 @@
     [task resume];
 }
 
-- (void)downloadBundleFromServerWithUrl:(NSString *)urlStr bundleId:(NSInteger)bundleId {
+- (void)downloadBundleFromServerWithUrl:(NSString *)urlStr bundleId:(NSInteger)bundleId versionCode: (NSString *)versionCode {
     NSURL *url = [NSURL URLWithString:urlStr];
     if (!url || ![urlStr rangeOfString:@"://" options:NSRegularExpressionSearch].length) {
         NSLog(@"RNAppPushUpdate ❌ Invalid download URL");
@@ -140,14 +162,15 @@
         NSString *destinationPath = [bundleDirectory stringByAppendingPathComponent:@"index.ios.bundle"];
 
         NSError *writeError;
-        [data writeToFile:destinationPath options:NSDataWritingAtomic error:&writeError];
-        if (writeError) {
+        BOOL success = [data writeToFile:destinationPath options:NSDataWritingAtomic error:&writeError];
+        if (!success || writeError) {
             NSLog(@"RNAppPushUpdate ❌ Error saving bundle: %@", writeError.localizedDescription);
             return;
         }
 
         NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
         [defaults setInteger:bundleId forKey:@"rn_app_push_update_shared_prefs_bundle_id"];
+        [defaults setObject:versionCode forKey:@"rn_app_push_update_shared_prefs_version_code"];
 
         NSLog(@"RNAppPushUpdate ✅ Bundle downloaded to %@", destinationPath);
     }];

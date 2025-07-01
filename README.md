@@ -1,6 +1,6 @@
 # react-native-app-push-update
 
-Over the air push update for a React Native App
+✅ A lightweight library for pushing over-the-air updates to your React Native app — silently and seamlessly, with no popup dialogs required.
 
 ## Installation
 
