@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/native_header"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:orientation="horizontal"
+  android:background="@android:color/holo_orange_light"
+  android:gravity="center_vertical"
+  android:tag="rn_app_push_update_header">
+  <TextView
+    android:id="@+id/updateText"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_weight="1"
+    android:layout_marginStart="15dp"
+    android:paddingTop="3dp"
+    android:fontFamily="@font/medium"
+    android:text="A new update is available"
+    android:textColor="@android:color/black"
+    android:textSize="14sp" />
+  <Button
+    android:id="@+id/updateButton"
+    android:layout_width="wrap_content"
+    android:layout_height="60dp"
+    android:layout_marginTop="1dp"
+    android:fontFamily="@font/medium"
+    android:text="Update"
+    android:textAllCaps="false"
+    android:background="?attr/selectableItemBackground"
+    android:textColor="@android:color/holo_blue_dark"
+    android:padding="8dp" />
+</LinearLayout>

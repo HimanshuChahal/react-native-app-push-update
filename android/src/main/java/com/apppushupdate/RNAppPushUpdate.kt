@@ -1,9 +1,17 @@
 package com.apppushupdate
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.util.Patterns
+import android.view.LayoutInflater
+import android.view.ViewGroup
+import android.widget.Button
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -12,16 +20,22 @@ import okhttp3.*
 import org.json.JSONObject
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.core.content.edit
+import com.facebook.react.ReactActivity
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
+import java.lang.ref.WeakReference
 
 object RNAppPushUpdate {
   private var initialized = false
+  private var activityRef: WeakReference<Activity>? = null
+  private var presentUpdateHeader = true
 
-  fun getJSBundleFile(application: Application): String? {
+  fun getJSBundleFile(application: Application, presentUpdateHeader: Boolean = true): String? {
     var bundlePath: String? = null
+    this.presentUpdateHeader = presentUpdateHeader
     try {
       if (!initialized) {
+        registerActivityLifecycleEvents(application)
         val bundleFile = File(application.filesDir, "index.android.bundle")
         if (bundleFile.exists()) {
           val packageInfo = application.packageManager.getPackageInfo(application.packageName, 0)
@@ -185,6 +199,7 @@ object RNAppPushUpdate {
                 putLong(application.getString(R.string.rn_app_push_update_shared_prefs_version_code), versionCode)
               }
               Log.d("RNAppPushUpdate", "✅ File downloaded to ${outputFile.absolutePath}")
+              if (presentUpdateHeader) showUpdateHeader()
             } else {
               Log.e("RNAppPushUpdate", "❌ Received empty or corrupted file, does the bundle exist on the server?")
             }
@@ -209,6 +224,76 @@ object RNAppPushUpdate {
       })
     } catch (e: Exception) {
       Log.e("RNAppPushUpdate", "❌ Failed to download file: ${e.message}")
+    }
+  }
+
+  private fun registerActivityLifecycleEvents(application: Application) {
+    application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+      override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+
+      override fun onActivityStarted(activity: Activity) {}
+
+      override fun onActivityResumed(activity: Activity) {
+        activityRef = WeakReference(activity)
+      }
+      override fun onActivityPaused(activity: Activity) {}
+      override fun onActivityStopped(activity: Activity) {}
+      override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+      override fun onActivityDestroyed(activity: Activity) {}
+    })
+  }
+
+  private fun showUpdateHeader() {
+    val handler = Handler(Looper.getMainLooper())
+    var attempts = 0
+    val poll = object : Runnable {
+      override fun run() {
+        val activity = activityRef?.get()
+        if (activity == null) {
+          if (++attempts < 5) {
+            handler.postDelayed(this, 1000)
+          }
+          return
+        }
+        if (activity is ReactActivity) {
+          val content = activity.findViewById<ViewGroup>(android.R.id.content)
+          val inflater = LayoutInflater.from(activity)
+          val header = inflater.inflate(R.layout.update_header, content, false)
+
+          header.findViewById<Button>(R.id.updateButton).setOnClickListener {
+            restartApp(activity)
+          }
+          val alreadyAdded = (0 until content.childCount).any {
+            content.getChildAt(it)?.tag == "rn_app_push_update_header"
+          }
+          if (!alreadyAdded) {
+            val insertIndex = 1.coerceAtMost(content.childCount)
+            content.addView(
+              header,
+              insertIndex,
+              ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                header.layoutParams?.height ?: ViewGroup.LayoutParams.WRAP_CONTENT
+              )
+            )
+          }
+        }
+      }
+    }
+    handler.post(poll)
+  }
+
+  private fun restartApp(activity: Activity) {
+    val context = activity.applicationContext
+    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+    if (intent != null) {
+      intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or
+        Intent.FLAG_ACTIVITY_NEW_TASK or
+        Intent.FLAG_ACTIVITY_CLEAR_TASK)
+      context.startActivity(intent)
+      Runtime.getRuntime().exit(0)
+    } else {
+      Log.e("RNAppPushUpdate", "Unable to restart app — launch intent is null")
     }
   }
 }
