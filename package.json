@@ -1,6 +1,6 @@
 {
   "name": "react-native-app-push-update",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Over the air push update for a React Native App",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

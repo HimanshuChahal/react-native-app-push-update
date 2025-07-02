@@ -127,9 +127,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 **⚠️ Important:** To get your product key, run this command `npx react-native-push-update product-key`
 
-## Usage
+## 🎉🎉 Congratulations 🎉🎉
 
 ### ✅ Updates will work silently, no further changes required for the update setup.
+
+## Usage
+
+### How to push the update?
+
+#### Run this command in your terminal
+
+```sh
+npx react-native-push-update
+```
+
+### To get the latest installed update version
 
 ```js
 import { getPushUpdateVersion } from 'react-native-app-push-update';
