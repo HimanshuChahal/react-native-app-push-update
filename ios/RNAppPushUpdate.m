@@ -1,6 +1,64 @@
 #import "RNAppPushUpdate.h"
 #import <React/RCTBridge.h>
 #import <React/RCTRootView.h>
+#import <objc/runtime.h>
+
+@interface RNAppUpdateButtonHandler : NSObject
+
+- (void)onUpdatePressed;
+
+@end
+
+@implementation RNAppUpdateButtonHandler
+
+- (NSString *)getLibraryDirectory {
+  NSArray *paths = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES);
+  return [paths firstObject];
+}
+
+- (void)onUpdatePressed {
+  UIWindow *window = nil;
+
+  for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+      if (scene.activationState == UISceneActivationStateForegroundActive &&
+          [scene isKindOfClass:[UIWindowScene class]]) {
+          
+          UIWindowScene *windowScene = (UIWindowScene *)scene;
+          window = windowScene.windows.firstObject;
+          break;
+      }
+  }
+  if (!window) return;
+
+  NSFileManager *fileManager = [NSFileManager defaultManager];
+
+  NSString *libraryDirPath = [self getLibraryDirectory];
+  NSURL *libraryDir = [NSURL fileURLWithPath:libraryDirPath];
+  NSURL *bundleDir = [libraryDir URLByAppendingPathComponent:@"Application Support"];
+  if (![fileManager fileExistsAtPath:bundleDir.path]) {
+    return;
+  }
+
+  NSURL *bundleFile = [bundleDir URLByAppendingPathComponent:@"index.ios.bundle"];
+  if (![fileManager fileExistsAtPath:bundleFile.path]) {
+    return;
+  }
+
+  NSString *jsBundlePath = bundleFile.path;
+  RCTBridge *bridge = [[RCTBridge alloc] initWithBundleURL:[NSURL fileURLWithPath:jsBundlePath]
+                                            moduleProvider:nil
+                                             launchOptions:nil];
+
+  NSString *moduleName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleExecutable"] ?: @"";
+  RCTRootView *rootView = [[RCTRootView alloc] initWithBridge:bridge moduleName:moduleName initialProperties:nil];
+
+  UIViewController *vc = [UIViewController new];
+  vc.view = rootView;
+  window.rootViewController = vc;
+  [window makeKeyAndVisible];
+}
+
+@end
 
 @interface RNAppPushUpdate ()
 
@@ -173,6 +231,7 @@
         [defaults setObject:versionCode forKey:@"rn_app_push_update_shared_prefs_version_code"];
 
         NSLog(@"RNAppPushUpdate ✅ Bundle downloaded to %@", destinationPath);
+        [self showUpdateHeader];
     }];
     [task resume];
 }
@@ -180,6 +239,75 @@
 - (NSString *)getLibraryDirectory {
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES);
     return [paths firstObject];
+}
+
+- (void)showUpdateHeader {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    UIWindow *window = nil;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (scene.activationState == UISceneActivationStateForegroundActive &&
+            [scene isKindOfClass:[UIWindowScene class]]) {
+            
+            UIWindowScene *windowScene = (UIWindowScene *)scene;
+            window = windowScene.windows.firstObject;
+            break;
+        }
+    }
+    if (!window) return;
+
+    UIView *rootView = window.rootViewController.view;
+    if (!rootView) return;
+    
+    RNAppUpdateButtonHandler *handler = [[RNAppUpdateButtonHandler alloc] init];
+
+    UIButton *headerView = [UIButton new];
+    headerView.translatesAutoresizingMaskIntoConstraints = NO;
+    headerView.backgroundColor = [UIColor colorWithRed:0.98 green:0.75 blue:0 alpha:1];
+    [headerView addTarget:handler action:@selector(onUpdatePressed) forControlEvents:UIControlEventTouchUpInside];
+
+    UILabel *label = [UILabel new];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    label.text = @"A new update is available";
+    label.textColor = [UIColor blackColor];
+    label.textAlignment = NSTextAlignmentLeft;
+    label.font = [UIFont boldSystemFontOfSize:14];
+    [headerView addSubview:label];
+
+    UIButton *button = [UIButton new];
+    button.translatesAutoresizingMaskIntoConstraints = NO;
+    [button addTarget:handler action:@selector(onUpdatePressed) forControlEvents:UIControlEventTouchUpInside];
+    [headerView addSubview:button];
+
+    UILabel *btnLabel = [UILabel new];
+    btnLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    btnLabel.font = [UIFont boldSystemFontOfSize:14];
+    btnLabel.text = @"Update";
+    btnLabel.textColor = [UIColor blueColor];
+    [button addSubview:btnLabel];
+
+    [rootView addSubview:headerView];
+    
+    objc_setAssociatedObject(headerView, "updateHandler", handler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(button, "updateHandler", handler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    [NSLayoutConstraint activateConstraints:@[
+      [headerView.topAnchor constraintEqualToAnchor:rootView.safeAreaLayoutGuide.topAnchor],
+      [headerView.leadingAnchor constraintEqualToAnchor:rootView.leadingAnchor],
+      [headerView.trailingAnchor constraintEqualToAnchor:rootView.trailingAnchor],
+      [headerView.heightAnchor constraintEqualToConstant:60],
+
+      [label.leadingAnchor constraintEqualToAnchor:headerView.leadingAnchor constant:15],
+      [label.centerYAnchor constraintEqualToAnchor:headerView.centerYAnchor],
+
+      [btnLabel.centerYAnchor constraintEqualToAnchor:button.centerYAnchor],
+      [btnLabel.trailingAnchor constraintEqualToAnchor:button.trailingAnchor constant:-15],
+
+      [button.topAnchor constraintEqualToAnchor:headerView.topAnchor],
+      [button.trailingAnchor constraintEqualToAnchor:headerView.trailingAnchor],
+      [button.bottomAnchor constraintEqualToAnchor:headerView.bottomAnchor],
+      [button.leadingAnchor constraintEqualToAnchor:btnLabel.leadingAnchor constant:-15],
+    ]];
+  });
 }
 
 @end

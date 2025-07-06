@@ -191,6 +191,7 @@ import React
         defaults.set(versionCode, forKey: "rn_app_push_update_shared_prefs_version_code")
 
         print("RNAppPushUpdate", "✅ File downloaded to \(destinationURL.path)")
+        self.showUpdateHeader()
       } catch {
         print("RNAppPushUpdate", "❌ Error in saving the downloaded bundle: \(error.localizedDescription)")
         let dirPath = self.getLibraryDirectory().appendingPathComponent("Application Support")
@@ -212,5 +213,89 @@ import React
 
   private func getLibraryDirectory() -> URL {
     return FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
+  }
+  
+  private func showUpdateHeader() {
+    DispatchQueue.main.async {
+      guard let window = self.getActiveWindow() else { return }
+      guard let rootView = window.rootViewController?.view else { return }
+      
+      let headerView = UIButton()
+      headerView.translatesAutoresizingMaskIntoConstraints = false
+      headerView.backgroundColor = UIColor(red: 0.98, green: 0.75, blue: 0, alpha: 1)
+      headerView.addAction(UIAction { _ in
+        self.onUpdatePressed()
+      }, for: .touchUpInside)
+      
+      let label = UILabel()
+      label.translatesAutoresizingMaskIntoConstraints = false
+      label.text = "A new update is available"
+      label.textColor = UIColor(red: 0, green: 0, blue: 0, alpha: 1)
+      label.textAlignment = .left
+      label.font = UIFont.boldSystemFont(ofSize: 14)
+      headerView.addSubview(label)
+      
+      let button = UIButton()
+      button.translatesAutoresizingMaskIntoConstraints = false
+      button.addAction(UIAction { _ in
+        self.onUpdatePressed()
+      }, for: .touchUpInside)
+      headerView.addSubview(button)
+      
+      let btnLabel = UILabel()
+      btnLabel.translatesAutoresizingMaskIntoConstraints = false
+      btnLabel.font = UIFont.boldSystemFont(ofSize: 14)
+      btnLabel.text = "Update"
+      btnLabel.textColor = UIColor.blue
+      button.addSubview(btnLabel)
+      
+      rootView.addSubview(headerView)
+      
+      NSLayoutConstraint.activate([
+        headerView.topAnchor.constraint(equalTo: rootView.safeAreaLayoutGuide.topAnchor),
+        headerView.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
+        headerView.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
+        headerView.heightAnchor.constraint(equalToConstant: 60),
+        label.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 15),
+        label.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+        btnLabel.centerYAnchor.constraint(equalTo: button.centerYAnchor),
+        btnLabel.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -15),
+        button.topAnchor.constraint(equalTo: headerView.topAnchor),
+        button.trailingAnchor.constraint(equalTo: headerView.trailingAnchor),
+        button.bottomAnchor.constraint(equalTo: headerView.bottomAnchor),
+        button.leadingAnchor.constraint(equalTo: btnLabel.leadingAnchor, constant: -15),
+      ])
+    }
+  }
+  
+  private func onUpdatePressed() {
+    guard let window = getActiveWindow() else { return }
+
+    let fileManager = FileManager.default
+    let bundleDirectory = getLibraryDirectory().appendingPathComponent("Application Support")
+    if !fileManager.fileExists(atPath: bundleDirectory.path) {
+      return
+    }
+    let bundleFile = bundleDirectory.appendingPathComponent("index.ios.bundle")
+    if !fileManager.fileExists(atPath: bundleFile.path) {
+      return
+    }
+    
+    let jsBundlePath = bundleFile.path
+    bridge = RCTBridge(bundleURL: URL(fileURLWithPath: jsBundlePath), moduleProvider: nil, launchOptions: nil)
+    let moduleName = Bundle.main.infoDictionary?["CFBundleExecutable"] as? String ?? ""
+    let rootView = RCTRootView(bridge: bridge!, moduleName: moduleName, initialProperties: nil)
+
+    window.rootViewController = UIViewController()
+    window.rootViewController?.view = rootView
+    window.makeKeyAndVisible()
+  }
+  
+  func getActiveWindow() -> UIWindow? {
+    return UIApplication.shared.connectedScenes
+      .filter { $0.activationState == .foregroundActive }
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap { $0.windows }
+      .first
   }
 }

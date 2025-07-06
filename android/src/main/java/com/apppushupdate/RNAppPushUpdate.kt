@@ -12,6 +12,7 @@ import android.util.Patterns
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.LinearLayout
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -261,6 +262,9 @@ object RNAppPushUpdate {
           val header = inflater.inflate(R.layout.update_header, content, false)
 
           header.findViewById<Button>(R.id.updateButton).setOnClickListener {
+            restartApp(activity)
+          }
+          header.findViewById<LinearLayout>(R.id.native_header).setOnClickListener {
             restartApp(activity)
           }
           val alreadyAdded = (0 until content.childCount).any {

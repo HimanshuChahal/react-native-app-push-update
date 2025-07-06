@@ -6,6 +6,8 @@
   android:orientation="horizontal"
   android:background="@android:color/holo_orange_light"
   android:gravity="center_vertical"
+  android:fitsSystemWindows="true"
+  android:elevation="10dp"
   android:tag="rn_app_push_update_header">
   <TextView
     android:id="@+id/updateText"
@@ -17,7 +19,8 @@
     android:fontFamily="@font/medium"
     android:text="A new update is available"
     android:textColor="@android:color/black"
-    android:textSize="14sp" />
+    android:textSize="14sp"
+    android:gravity="start" />
   <Button
     android:id="@+id/updateButton"
     android:layout_width="wrap_content"
