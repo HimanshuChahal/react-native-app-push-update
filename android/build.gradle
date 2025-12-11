@@ -33,6 +33,17 @@ android {
   defaultConfig {
     minSdkVersion getExtOrIntegerDefault("minSdkVersion")
     targetSdkVersion getExtOrIntegerDefault("targetSdkVersion")
+    externalNativeBuild {
+      cmake {
+          cppFlags "-std=c++17"
+      }
+    }
+  }
+
+  externalNativeBuild {
+    cmake {
+        path "src/main/cpp/CMakeLists.txt"
+    }
   }
 
   buildFeatures {

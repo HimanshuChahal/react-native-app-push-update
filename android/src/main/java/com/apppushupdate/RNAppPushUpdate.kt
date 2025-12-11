@@ -38,7 +38,7 @@ object RNAppPushUpdate {
       if (!initialized) {
         registerActivityLifecycleEvents(application)
         val bundleFile = File(application.filesDir, "index.android.bundle")
-        if (bundleFile.exists()) {
+        if (bundleFile.exists() && bundleFile.length() < 50_000) {
           val packageInfo = application.packageManager.getPackageInfo(application.packageName, 0)
           val versionCode = PackageInfoCompat.getLongVersionCode(packageInfo)
           val sharedPrefs = application.getSharedPreferences(
@@ -57,6 +57,7 @@ object RNAppPushUpdate {
               Log.d("RNAppPushUpdate", "✅ Bundle file deleted.")
               sharedPrefs.edit {
                 remove(application.getString(R.string.rn_app_push_update_shared_prefs_bundle_id))
+                remove(application.getString(R.string.rn_app_push_update_shared_prefs_patch_id))
                 remove(application.getString(R.string.rn_app_push_update_shared_prefs_version_code))
               }
             } else {
@@ -134,15 +135,18 @@ object RNAppPushUpdate {
           val body = response.body?.string()
 
           try {
-            val json = JSONObject(body ?: "")
-            val isVersionAccepted = json.optBoolean("is_version_accepted", true)
-            val downloadUrl = json.optString("download_url")
-            val bundleId = json.optInt("accepted_bundle_id")
+            val json = JSONObject(body ?: "{}")
+            val bundleUrl = json.optString("bundle_url")
+            val bundleId = json.optInt("bundle_id")
+            val patchUrl = json.optString("patch_url")
+            val patchId = json.optInt("patch_id")
 
-            if (isVersionAccepted && downloadUrl != null && downloadUrl.isNotEmpty()) {
+            if (bundleUrl != null && bundleUrl.isNotEmpty()) {
               val sharedPrefs = application.getSharedPreferences(application.getString(R.string.rn_app_push_update_shared_prefs), Context.MODE_PRIVATE)
               val downloadedBundleId = sharedPrefs.getInt(application.getString(R.string.rn_app_push_update_shared_prefs_bundle_id), -1)
-              if (downloadedBundleId != bundleId) downloadBundleFromServer(application, downloadUrl, bundleId, versionCode)
+              val downloadedPatchId = sharedPrefs.getInt(application.getString(R.string.rn_app_push_update_shared_prefs_patch_id), -1)
+              if (downloadedBundleId != bundleId) downloadBundleFromServer(application, bundleUrl, bundleId, patchUrl, patchId, versionCode)
+              else if (patchUrl != null && patchUrl.isNotEmpty() && downloadedPatchId != patchId) downloadPatchFromServer(application, patchUrl, patchId)
               else Log.i("RNAppPushUpdate", "Latest bundle already downloaded")
             } else {
               Log.d("RNAppPushUpdate", "No download URL received")
@@ -159,14 +163,14 @@ object RNAppPushUpdate {
     }
   }
 
-  private fun downloadBundleFromServer(application: Application, urlStr: String, bundleId: Int, versionCode: Long) {
+  private fun downloadBundleFromServer(application: Application, urlStr: String, bundleId: Int, patchUrl: String, patchId: Int, versionCode: Long) {
     if (!Patterns.WEB_URL.matcher(urlStr).matches()) {
       Log.e("RNAppPushUpdate", "❌ Invalid download URL")
       return
     }
     try {
       val client = OkHttpClient.Builder()
-        .callTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(60, TimeUnit.SECONDS)
         .build()
       val request = Request.Builder()
         .url(urlStr)
@@ -200,7 +204,8 @@ object RNAppPushUpdate {
                 putLong(application.getString(R.string.rn_app_push_update_shared_prefs_version_code), versionCode)
               }
               Log.d("RNAppPushUpdate", "✅ File downloaded to ${outputFile.absolutePath}")
-              if (presentUpdateHeader) showUpdateHeader()
+              if (patchUrl.isNotEmpty() && patchId > 0) downloadPatchFromServer(application, patchUrl, patchId)
+              else if (presentUpdateHeader) showUpdateHeader()
             } else {
               Log.e("RNAppPushUpdate", "❌ Received empty or corrupted file, does the bundle exist on the server?")
             }
@@ -228,6 +233,87 @@ object RNAppPushUpdate {
     }
   }
 
+  private fun downloadPatchFromServer(application: Application, patchUrl: String, patchId: Int) {
+    if (!Patterns.WEB_URL.matcher(patchUrl).matches()) {
+      Log.e("RNAppPushUpdate", "❌ Invalid patch download URL")
+      return
+    }
+    try {
+      val client = OkHttpClient.Builder()
+        .callTimeout(30, TimeUnit.SECONDS)
+        .build()
+      val request = Request.Builder()
+        .url(patchUrl)
+        .build()
+
+      client.newCall(request).enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+          Log.e("RNAppPushUpdate", "❌ Error in downloading the patch ${e.message ?: ""}")
+          e.printStackTrace()
+        }
+
+        override fun onResponse(call: Call, response: Response) {
+          if (!response.isSuccessful) {
+            Log.e("RNAppPushUpdate", "❌ Error in downloading the patch, unexpected code $response")
+            return
+          }
+          try {
+            val outputFile = File(application.filesDir, "bundle.patch")
+            val outputStream = FileOutputStream(outputFile)
+
+            val body = response.body
+            if (body != null) {
+              outputStream.use { out ->
+                body.byteStream().use { input ->
+                  input.copyTo(out)
+                }
+              }
+              val sharedPrefs = application.getSharedPreferences(application.getString(R.string.rn_app_push_update_shared_prefs), Context.MODE_PRIVATE)
+              sharedPrefs.edit {
+                putInt(application.getString(R.string.rn_app_push_update_shared_prefs_patch_id), patchId)
+              }
+              val oldPath = File(application.filesDir, "index.android.bundle")
+              val patchPath = File(application.filesDir, "bundle.patch")
+              val outputPath = File(application.filesDir, "new_index.android.bundle")
+              val patchResult = NativeBridge.applyPatch(oldPath.absolutePath, patchPath.absolutePath, outputPath.absolutePath)
+              if (patchResult == 0) {
+                if (oldPath.exists()) oldPath.delete()
+                val rename = outputPath.renameTo(oldPath)
+                if (!rename) throw Exception("Unable to rename the patched bundle")
+                if (presentUpdateHeader) showUpdateHeader()
+              } else {
+                throw Exception("Apply patch failed")
+              }
+            } else {
+              Log.e("RNAppPushUpdate", "❌ Received empty or corrupted file, does the patch exist on the server?")
+            }
+          } catch (e: Exception) {
+            Log.e("RNAppPushUpdate", "❌ Error in parsing the patch downloaded from the server")
+            e.printStackTrace()
+            val patchFile = File(application.filesDir, "bundle.patch")
+            if (patchFile.exists()) {
+              if(patchFile.delete()) {
+                val sharedPrefs = application.getSharedPreferences(
+                  application.getString(R.string.rn_app_push_update_shared_prefs),
+                  Context.MODE_PRIVATE
+                )
+                sharedPrefs.edit {
+                  remove(application.getString(R.string.rn_app_push_update_shared_prefs_patch_id))
+                }
+              }
+            }
+          } finally {
+            val patchFile = File(application.filesDir, "bundle.patch")
+            if (patchFile.exists()) patchFile.delete()
+          }
+        }
+
+      })
+    } catch (e: Exception) {
+      Log.e("RNAppPushUpdate", "❌ Failed to download the patch file: ${e.message}")
+    }
+  }
+
   private fun registerActivityLifecycleEvents(application: Application) {
     application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
       override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
@@ -251,7 +337,7 @@ object RNAppPushUpdate {
       override fun run() {
         val activity = activityRef?.get()
         if (activity == null) {
-          if (++attempts < 5) {
+          if (++attempts < 30) {
             handler.postDelayed(this, 1000)
           }
           return
