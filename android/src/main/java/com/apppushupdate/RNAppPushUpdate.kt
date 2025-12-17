@@ -221,6 +221,7 @@ object RNAppPushUpdate {
                 )
                 sharedPrefs.edit {
                   remove(application.getString(R.string.rn_app_push_update_shared_prefs_bundle_id))
+                  remove(application.getString(R.string.rn_app_push_update_shared_prefs_patch_id))
                   remove(application.getString(R.string.rn_app_push_update_shared_prefs_version_code))
                 }
               }

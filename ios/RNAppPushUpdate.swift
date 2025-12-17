@@ -25,7 +25,7 @@ import React
     
     if !initialized {
       let fileManager = FileManager.default
-      let bundleDirectory = getLibraryDirectory().appendingPathComponent("Application Support")
+      let bundleDirectory = getLibraryDirectory()
       if !fileManager.fileExists(atPath: bundleDirectory.path) {
         do {
           try fileManager.createDirectory(at: bundleDirectory, withIntermediateDirectories: true, attributes: nil)
@@ -35,6 +35,12 @@ import React
       }
       let bundleFile = bundleDirectory.appendingPathComponent("index.ios.bundle")
       if FileManager.default.fileExists(atPath: bundleFile.path) {
+        var fileSize = 0
+        do {
+          let resourceValue = try bundleFile.resourceValues(forKeys: [.fileSizeKey])
+          fileSize = resourceValue.fileSize ?? 0
+        } catch {}
+        if fileSize < 50_000 {}
         let defaults = UserDefaults.standard
         let downloadedVersionCode = defaults.string(forKey: "rn_app_push_update_shared_prefs_version_code") ?? "-1"
         let versionCode = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
@@ -47,6 +53,7 @@ import React
             try FileManager.default.removeItem(at: bundleFile)
             print("RNAppPushUpdate", "✅ Bundle file deleted.")
             UserDefaults.standard.removeObject(forKey: "rn_app_push_update_shared_prefs_bundle_id")
+            UserDefaults.standard.removeObject(forKey: "rn_app_push_update_shared_prefs_patch_id")
             UserDefaults.standard.removeObject(forKey: "rn_app_push_update_shared_prefs_version_code")
           } catch {
             print("RNAppPushUpdate", "⚠️ Failed to delete bundle file.")
@@ -90,7 +97,7 @@ import React
 
   private func getBundleFromPrivateDirectory() -> String? {
     let fileManager = FileManager.default
-    let bundleDirectory = getLibraryDirectory().appendingPathComponent("Application Support")
+    let bundleDirectory = getLibraryDirectory()
     let filePath = bundleDirectory.appendingPathComponent("index.ios.bundle")
     
     if fileManager.fileExists(atPath: filePath.path) {
@@ -132,15 +139,20 @@ import React
 
         do {
           if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
-            let isVersionAccepted = json["is_version_accepted"] as? Bool ?? true
-            let downloadUrl = json["download_url"] as? String
-            let bundleId = json["accepted_bundle_id"] as? Int ?? -1
-            if isVersionAccepted, let downloadUrl = downloadUrl, !downloadUrl.isEmpty {
+            let bundleId = json["bundle_id"] as? Int ?? -1
+            let bundleUrl = json["bundle_url"] as? String
+            let patchId = json["patch_id"] as? Int ?? -1
+            let patchUrl = json["patch_url"] as? String ?? ""
+            if let downloadUrl = bundleUrl, !downloadUrl.isEmpty {
               let defaults = UserDefaults.standard
               let downloadedBundleId = defaults.integer(forKey: "rn_app_push_update_shared_prefs_bundle_id")
+              let downloadedPatchId = defaults.integer(forKey:
+                  "rn_app_push_update_shared_prefs_patch_id")
               
               if downloadedBundleId != bundleId {
-                self.downloadBundleFromServer(urlStr: downloadUrl, bundleId: bundleId, versionCode: versionCode)
+                self.downloadBundleFromServer(urlStr: downloadUrl, bundleId: bundleId, patchUrl: patchUrl, patchId: patchId, versionCode: versionCode)
+              } else if !patchUrl.isEmpty && downloadedPatchId != patchId {
+                self.downloadPatchFromServer(patchUrl: patchUrl, patchId: patchId)
               } else {
                 print("RNAppPushUpdate", "Latest bundle already downloaded")
               }
@@ -154,7 +166,7 @@ import React
     }.resume()
   }
 
-  private func downloadBundleFromServer(urlStr: String, bundleId: Int, versionCode: String) {
+  private func downloadBundleFromServer(urlStr: String, bundleId: Int, patchUrl: String, patchId: Int, versionCode: String) {
     guard let url = URL(string: urlStr), urlStr.range(of: "^[a-zA-Z0-9-]+://", options: .regularExpression) != nil else {
       print("RNAppPushUpdate", "❌ Invalid download URL")
       return
@@ -181,7 +193,7 @@ import React
 
       do {
         let fileManager = FileManager.default
-        let bundleURL = self.getLibraryDirectory().appendingPathComponent("Application Support")
+        let bundleURL = self.getLibraryDirectory()
         let destinationURL = bundleURL.appendingPathComponent("index.ios.bundle")
 
         try data.write(to: destinationURL)
@@ -191,16 +203,22 @@ import React
         defaults.set(versionCode, forKey: "rn_app_push_update_shared_prefs_version_code")
 
         print("RNAppPushUpdate", "✅ File downloaded to \(destinationURL.path)")
-        self.showUpdateHeader()
+        if !patchUrl.isEmpty && patchId > 0 {
+          self.downloadPatchFromServer(patchUrl: patchUrl, patchId: patchId)
+        } else {
+          self.showUpdateHeader()
+        }
       } catch {
         print("RNAppPushUpdate", "❌ Error in saving the downloaded bundle: \(error.localizedDescription)")
-        let dirPath = self.getLibraryDirectory().appendingPathComponent("Application Support")
+        let dirPath = self.getLibraryDirectory()
         if FileManager.default.fileExists(atPath: dirPath.path) {
           let bundle = dirPath.appendingPathComponent("index.ios.bundle")
           if FileManager.default.fileExists(atPath: bundle.path) {
             do {
               try FileManager.default.removeItem(at: bundle)
               UserDefaults.standard.removeObject(forKey: "rn_app_push_update_shared_prefs_bundle_id")
+              UserDefaults.standard.removeObject(forKey:
+                  "rn_app_push_update_shared_prefs_patch_id")
               UserDefaults.standard.removeObject(forKey: "rn_app_push_update_shared_prefs_version_code")
             } catch {}
           }
@@ -211,8 +229,84 @@ import React
     task.resume()
   }
 
+  private func downloadPatchFromServer(patchUrl: String, patchId: Int) {
+    guard let url = URL(string: patchUrl), patchUrl.range(of: "^[a-zA-Z0-9-]+://", options: .regularExpression) != nil else {
+      print("RNAppPushUpdate", "❌ Invalid patch download URL")
+      return
+    }
+    
+    let client = URLSession.shared
+    let request = URLRequest(url: url)
+    
+    client.dataTask(with: request) { (data, response, error) in
+      if let error = error {
+        print("RNAppPushUpdate", "❌ Error in downloading the patch: \(error.localizedDescription)")
+        return
+      }
+
+      guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+        print("RNAppPushUpdate", "❌ Error in downloading the patch, unexpected response")
+        return
+      }
+
+      guard let data = data else {
+        print("RNAppPushUpdate", "❌ Received empty or corrupted patch file, does the patch exist on the server?")
+        return
+      }
+      
+      do {
+        let bundleURL = self.getLibraryDirectory()
+        let destinationURL = bundleURL.appendingPathComponent("bundle.patch")
+        
+        try data.write(to: destinationURL)
+        
+        defer {
+          do {
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+              try FileManager.default.removeItem(at: destinationURL)
+            }
+          } catch {
+            print("RNAppPushUpdate", "Could not delete the patch file, error: \(error.localizedDescription)")
+          }
+        }
+
+        let defaults = UserDefaults.standard
+        defaults.set(patchId, forKey: "rn_app_push_update_shared_prefs_patch_id")
+        
+        let oldPath = bundleURL.appendingPathComponent("index.android.bundle")
+        let patchPath = bundleURL.appendingPathComponent("bundle.patch")
+        let outputPath = bundleURL.appendingPathComponent("new_index.android.bundle")
+        
+        let patchResult = 0
+        if patchResult == 0 {
+          if FileManager.default.fileExists(atPath: oldPath.path) {
+              try FileManager.default.removeItem(at: oldPath)
+          }
+          try FileManager.default.moveItem(at: outputPath, to: oldPath)
+          self.showUpdateHeader()
+        } else {
+          throw NSError(domain: "RNAppPushUpdate", code: 1, userInfo: [NSLocalizedDescriptionKey: "Apply patch failed"])
+        }
+      } catch {
+        print("RNAppPushUpdate", "❌ Error in parsing the patch downloaded from the server")
+        print(error.localizedDescription)
+        let bundleURL = self.getLibraryDirectory()
+        let patchPath = bundleURL.appendingPathComponent("bundle.patch")
+        do {
+          if FileManager.default.fileExists(atPath: patchPath.path) {
+            try FileManager.default.removeItem(at: patchPath)
+            UserDefaults.standard.removeObject(forKey:
+                "rn_app_push_update_shared_prefs_patch_id")
+          }
+        } catch {
+          print("RNAppPushUpdate", "Could not delete the patch file, error: \(error.localizedDescription)")
+        }
+      }
+    }.resume()
+  }
+
   private func getLibraryDirectory() -> URL {
-    return FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
+    return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
   }
   
   private func showUpdateHeader() {
@@ -272,7 +366,7 @@ import React
     guard let window = getActiveWindow() else { return }
 
     let fileManager = FileManager.default
-    let bundleDirectory = getLibraryDirectory().appendingPathComponent("Application Support")
+    let bundleDirectory = getLibraryDirectory()
     if !fileManager.fileExists(atPath: bundleDirectory.path) {
       return
     }
